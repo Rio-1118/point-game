@@ -8,7 +8,6 @@ import { createEvent } from "@/lib/events";
 import { db } from "@/lib/firebase";
 import type { User } from "firebase/auth";
 
-
 import {
   PopShell,
   PopCard,
@@ -17,7 +16,6 @@ import {
   PopSelect,
   PopTextarea,
   PopPill,
-  PopBigNumber,
 } from "@/components/PopUI";
 
 type Reason = { id: string; label: string };
@@ -60,14 +58,18 @@ export default function EntryPage() {
   useEffect(() => {
     const unsub = watchAuthAndRole(
       async (user: User | null, role: string | null) => {
-        if (!user) return;
-        
+        if (!user) {
+          router.replace("/login");
+          return;
+        }
+
         if (role !== "editor" && role !== "admin") {
           router.replace("/");
           return;
         }
 
         const snap = await getDoc(doc(db, "users", user.uid));
+
         const pn =
           snap.exists() && (snap.data() as any).name
             ? String((snap.data() as any).name)
@@ -77,10 +79,9 @@ export default function EntryPage() {
 
         setMyName(pn);
         setUid(user.uid);
-        setRole(role);
+        setRole(role as Role);
         setLoading(false);
       },
-      () => router.replace("/login"),
       () => router.replace("/login")
     );
 
