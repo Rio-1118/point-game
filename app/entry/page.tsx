@@ -60,6 +60,8 @@ export default function EntryPage() {
   useEffect(() => {
     const unsub = watchAuthAndRole(
       async (user: User | null, role: string | null) => {
+        if (!user) return;
+        
         if (role !== "editor" && role !== "admin") {
           router.replace("/");
           return;
