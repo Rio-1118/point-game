@@ -1,27 +1,30 @@
-import { onAuthStateChanged, User } from "firebase/auth";
+"use client";
+
+import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 
-export type Role = "viewer" | "editor" | "admin";
+export type Role = "admin" | "editor" | "viewer";
+
+export async function getMyRole(): Promise<Role> {
+  const u = auth.currentUser;
+  if (!u) return "viewer";
+
+  const snap = await getDoc(doc(db, "users", u.uid));
+  const role = (snap.exists() ? snap.data().role : "viewer") as Role;
+  return role ?? "viewer";
+}
 
 export function watchAuthAndRole(
-  onReady: (user: User, role: Role) => void,
-  onNoUser: () => void,
-  onError: (msg: string) => void
+  onReady: (info: { uid: string; email: string | null; role: Role }) => void,
+  onNotLoggedIn?: () => void
 ) {
-  return onAuthStateChanged(auth, async (user) => {
-    try {
-      if (!user) return onNoUser();
-
-      const snap = await getDoc(doc(db, "users", user.uid));
-      if (!snap.exists()) {
-        return onError(`users/${user.uid} がありません（Firestoreにユーザーがありません）`);
-      }
-
-      const role = snap.data().role as Role;
-      onReady(user, role);
-    } catch (e: any) {
-      onError(e?.message ?? String(e));
+  return onAuthStateChanged(auth, async (u) => {
+    if (!u) {
+      onNotLoggedIn?.();
+      return;
     }
+    const role = await getMyRole();
+    onReady({ uid: u.uid, email: u.email, role });
   });
 }
