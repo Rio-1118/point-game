@@ -6,6 +6,8 @@ import { doc, getDoc } from "firebase/firestore";
 import { watchAuthAndRole, type Role } from "@/lib/role";
 import { createEvent } from "@/lib/events";
 import { db } from "@/lib/firebase";
+import type { User } from "firebase/auth";
+
 
 import {
   PopShell,
@@ -57,7 +59,7 @@ export default function EntryPage() {
   // 🔒 editor/admin だけ入れる ＋ PN取得
   useEffect(() => {
     const unsub = watchAuthAndRole(
-      async (user, role) => {
+      async (user: User | null, role: string | null) => {
         if (role !== "editor" && role !== "admin") {
           router.replace("/");
           return;
