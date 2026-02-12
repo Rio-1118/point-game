@@ -99,8 +99,7 @@ export default function EntryPage() {
       await createEvent({
         delta,
         date: eventDate,
-        reasonId,
-        reasonLabel,
+        reason: reasonLabel, 
         note: note.trim(),
         createdBy: uid,
         createdByName: myName,
