@@ -6,7 +6,6 @@ import { doc, getDoc } from "firebase/firestore";
 import { watchAuthAndRole, type Role } from "@/lib/role";
 import { createEvent } from "@/lib/events";
 import { db } from "@/lib/firebase";
-import type { User } from "firebase/auth";
 
 import {
   PopShell,
@@ -57,29 +56,24 @@ export default function EntryPage() {
   // 🔒 editor/admin だけ入れる ＋ PN取得
   useEffect(() => {
     const unsub = watchAuthAndRole(
-      async (user: User | null, role: string | null) => {
-        if (!user) {
-          router.replace("/login");
-          return;
-        }
-
-        if (role !== "editor" && role !== "admin") {
+      async (info) => {
+        // info = { uid, email, role }
+        if (info.role !== "editor" && info.role !== "admin") {
           router.replace("/");
           return;
         }
 
-        const snap = await getDoc(doc(db, "users", user.uid));
-
+        const snap = await getDoc(doc(db, "users", info.uid));
         const pn =
           snap.exists() && (snap.data() as any).name
             ? String((snap.data() as any).name)
-            : user.email
-            ? user.email.split("@")[0]
+            : info.email
+            ? info.email.split("@")[0]
             : "だれか";
 
         setMyName(pn);
-        setUid(user.uid);
-        setRole(role as Role);
+        setUid(info.uid);
+        setRole(info.role);
         setLoading(false);
       },
       () => router.replace("/login")
@@ -166,11 +160,7 @@ export default function EntryPage() {
 
           <div style={{ display: "grid", gap: 8 }}>
             <div style={{ fontWeight: 900 }}>日付</div>
-            <PopInput
-              type="date"
-              value={eventDate}
-              onChange={(e) => setEventDate(e.target.value)}
-            />
+            <PopInput type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} />
           </div>
         </div>
       </PopCard>
