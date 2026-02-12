@@ -98,7 +98,7 @@ export default function EntryPage() {
     try {
       await createEvent({
         delta,
-        eventDate,
+        date: eventDate,
         reasonId,
         reasonLabel,
         note: note.trim(),
