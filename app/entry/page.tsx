@@ -120,9 +120,7 @@ export default function EntryPage() {
   if (loading) {
     return (
       <PopShell>
-        <PopCard icon="⏳" title="確認中…">
-          少し待ってね
-        </PopCard>
+        <PopCard icon="⏳" title="確認中…">少し待ってね</PopCard>
       </PopShell>
     );
   }
@@ -139,10 +137,16 @@ export default function EntryPage() {
       <PopCard icon={sign === "plus" ? "➕" : "➖"} title="加点 / 減点">
         <div style={{ display: "grid", gap: 10 }}>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <PopButton variant={sign === "plus" ? "primary" : "ghost"} onClick={() => setSign("plus")}>
+            <PopButton
+              variant={sign === "plus" ? "primary" : "ghost"}
+              onClick={() => setSign("plus")}
+            >
               ＋ 加点
             </PopButton>
-            <PopButton variant={sign === "minus" ? "danger" : "ghost"} onClick={() => setSign("minus")}>
+            <PopButton
+              variant={sign === "minus" ? "danger" : "ghost"}
+              onClick={() => setSign("minus")}
+            >
               － 減点
             </PopButton>
           </div>
