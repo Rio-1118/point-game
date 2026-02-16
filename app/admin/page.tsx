@@ -2,7 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { collection, doc, getDocs, updateDoc } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDocs,
+  updateDoc,
+  addDoc,
+  orderBy,
+  query,
+} from "firebase/firestore";
+
 import { watchAuthAndRole, type Role } from "@/lib/role";
 import { db } from "@/lib/firebase";
 
@@ -14,24 +23,31 @@ import {
   PopPill,
 } from "@/components/PopUI";
 
-type UserRow = {
-  uid: string;
-  email: string | null;
+type UserDoc = {
+  id: string;
+  email: string;
   role: Role;
-  name: string | null; // PN
+  name?: string;
+};
+
+type Goal = {
+  id: string;
+  label: string;
+  point: number;
 };
 
 export default function AdminPage() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
-  const [role, setRole] = useState<Role | null>(null);
 
-  const [users, setUsers] = useState<UserRow[]>([]);
-  const [msg, setMsg] = useState<string>("");
-  const [savingUid, setSavingUid] = useState<string>("");
+  const [users, setUsers] = useState<UserDoc[]>([]);
+  const [goals, setGoals] = useState<Goal[]>([]);
 
-  // adminガード + 一覧ロード
+  const [newGoalLabel, setNewGoalLabel] = useState("");
+  const [newGoalPoint, setNewGoalPoint] = useState(100);
+
+  // 権限確認
   useEffect(() => {
     const unsub = watchAuthAndRole(
       async (info) => {
@@ -40,85 +56,85 @@ export default function AdminPage() {
           return;
         }
 
-        setRole(info.role);
-        setLoading(false);
         await loadUsers();
+        await loadGoals();
+
+        setLoading(false);
       },
       () => router.replace("/login")
     );
 
     return () => unsub();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
+  // users読み込み
   async function loadUsers() {
-    setMsg("");
-    try {
-      const snap = await getDocs(collection(db, "users"));
-      const list: UserRow[] = snap.docs.map((d) => {
-        const data = d.data() as any;
-        return {
-          uid: d.id,
-          email: data.email ?? null,
-          role: (data.role ?? "viewer") as Role,
-          name: data.name ?? null,
-        };
-      });
+    const snap = await getDocs(collection(db, "users"));
 
-      // 表示を安定させる（email順）
-      list.sort((a, b) => (a.email ?? "").localeCompare(b.email ?? ""));
-      setUsers(list);
-    } catch (e: any) {
-      setMsg(`❌ users一覧を取得できません: ${e?.message ?? e}`);
-    }
+    const list: UserDoc[] = snap.docs.map((d) => ({
+      id: d.id,
+      ...(d.data() as any),
+    }));
+
+    setUsers(list);
   }
 
-  async function changeRole(uid: string, nextRole: Role) {
-    setMsg("");
-    setSavingUid(uid);
-    try {
-      await updateDoc(doc(db, "users", uid), { role: nextRole });
-      setUsers((prev) => prev.map((u) => (u.uid === uid ? { ...u, role: nextRole } : u)));
-      setMsg("✅ 役割を更新しました");
-    } catch (e: any) {
-      setMsg(`❌ 役割更新に失敗: ${e?.message ?? e}`);
-    } finally {
-      setSavingUid("");
-    }
+  // goals読み込み
+  async function loadGoals() {
+    const snap = await getDocs(
+      query(collection(db, "goals"), orderBy("point"))
+    );
+
+    const list: Goal[] = snap.docs.map((d) => ({
+      id: d.id,
+      ...(d.data() as any),
+    }));
+
+    setGoals(list);
   }
 
-  async function savePN(uid: string, pn: string) {
-    const trimmed = pn.trim();
-    setMsg("");
-    setSavingUid(uid);
-    try {
-      await updateDoc(doc(db, "users", uid), { name: trimmed.length ? trimmed : null });
-      setUsers((prev) => prev.map((u) => (u.uid === uid ? { ...u, name: trimmed.length ? trimmed : null } : u)));
-      setMsg("✅ PN を更新しました");
-    } catch (e: any) {
-      setMsg(`❌ PN更新に失敗: ${e?.message ?? e}`);
-    } finally {
-      setSavingUid("");
-    }
+  // role変更
+  async function changeRole(uid: string, role: Role) {
+    await updateDoc(doc(db, "users", uid), { role });
+    await loadUsers();
+  }
+
+  // PN変更
+  async function changeName(uid: string, name: string) {
+    await updateDoc(doc(db, "users", uid), { name });
+    await loadUsers();
+  }
+
+  // ゴール追加
+  async function addGoal() {
+    if (!newGoalLabel || !newGoalPoint) return;
+
+    await addDoc(collection(db, "goals"), {
+      label: newGoalLabel,
+      point: Number(newGoalPoint),
+    });
+
+    setNewGoalLabel("");
+    setNewGoalPoint(100);
+
+    await loadGoals();
+  }
+
+  // ゴール編集
+  async function updateGoal(id: string, label: string, point: number) {
+    await updateDoc(doc(db, "goals", id), {
+      label,
+      point: Number(point),
+    });
+
+    await loadGoals();
   }
 
   if (loading) {
     return (
       <PopShell>
-        <PopCard icon="⏳" title="確認中…">少し待ってね</PopCard>
-      </PopShell>
-    );
-  }
-
-  // roleがadmin以外は弾いてるけど、画面としても出しておく
-  if (role !== "admin") {
-    return (
-      <PopShell>
-        <PopCard icon="⛔" title="権限がありません">
-          admin だけが入れます
-          <div style={{ marginTop: 12 }}>
-            <PopButton variant="ghost" onClick={() => router.push("/")}>戻る</PopButton>
-          </div>
+        <PopCard icon="⏳" title="確認中">
+          少し待ってね
         </PopCard>
       </PopShell>
     );
@@ -126,98 +142,110 @@ export default function AdminPage() {
 
   return (
     <PopShell>
-      <PopCard icon="⚙️" title="管理者画面">
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-          <PopPill>adminのみ</PopPill>
-          <PopButton variant="ghost" onClick={loadUsers}>最新に更新</PopButton>
-          <PopButton variant="ghost" onClick={() => router.push("/")}>ホームへ</PopButton>
-        </div>
-      </PopCard>
 
-      {msg ? (
-        <PopCard icon={msg.startsWith("✅") ? "✅" : "⚠️"} title="メッセージ">
-          <div style={{ fontWeight: 900 }}>{msg}</div>
-        </PopCard>
-      ) : null}
+      {/* ユーザー管理 */}
+      <PopCard icon="👥" title="ユーザー管理">
 
-      <PopCard icon="👥" title="ユーザー管理（役割 / PN）">
-        {users.length === 0 ? (
-          <div>ユーザーがまだいません（ログインすると users が作られます）</div>
-        ) : (
-          <div style={{ display: "grid", gap: 12 }}>
-            {users.map((u) => (
-              <div
-                key={u.uid}
-                style={{
-                  border: "1px solid rgba(0,0,0,0.15)",
-                  borderRadius: 14,
-                  padding: 12,
-                  background: "rgba(255,255,255,0.8)",
-                }}
-              >
-                <div style={{ fontWeight: 900, fontSize: 16 }}>
-                  {u.email ?? "（emailなし）"}
-                </div>
+        {users.map((u) => (
+          <div key={u.id} style={{ marginBottom: 16 }}>
 
-                <div style={{ marginTop: 6, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <PopPill>UID: {u.uid}</PopPill>
-                  <PopPill>現在: {u.role}</PopPill>
-                  <PopPill>PN: {u.name ?? "（未設定）"}</PopPill>
-                </div>
+            <PopPill>{u.email}</PopPill>
 
-                <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
-                  {/* 役割変更 */}
-                  <div style={{ fontWeight: 900 }}>役割を変更</div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <PopButton
-                      variant={u.role === "viewer" ? "primary" : "ghost"}
-                      disabled={savingUid === u.uid}
-                      onClick={() => changeRole(u.uid, "viewer")}
-                    >
-                      閲覧者
-                    </PopButton>
-                    <PopButton
-                      variant={u.role === "editor" ? "primary" : "ghost"}
-                      disabled={savingUid === u.uid}
-                      onClick={() => changeRole(u.uid, "editor")}
-                    >
-                      入力者
-                    </PopButton>
-                    <PopButton
-                      variant={u.role === "admin" ? "primary" : "ghost"}
-                      disabled={savingUid === u.uid}
-                      onClick={() => changeRole(u.uid, "admin")}
-                    >
-                      管理者
-                    </PopButton>
-                  </div>
+            <div style={{ marginTop: 6 }}>
 
-                  {/* PN変更 */}
-                  <div style={{ fontWeight: 900, marginTop: 6 }}>PN を変更</div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                    <PopInput
-                      value={u.name ?? ""}
-                      placeholder="例：りお / たろう / みき など"
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setUsers((prev) =>
-                          prev.map((x) => (x.uid === u.uid ? { ...x, name: v } : x))
-                        );
-                      }}
-                    />
-                    <PopButton
-                      disabled={savingUid === u.uid}
-                      onClick={() => savePN(u.uid, u.name ?? "")}
-                    >
-                      保存
-                    </PopButton>
-                  </div>
-                </div>
-              </div>
-            ))}
+              PN：
+              <PopInput
+                defaultValue={u.name || ""}
+                onBlur={(e) =>
+                  changeName(u.id, e.target.value)
+                }
+              />
+
+            </div>
+
+            <div style={{ marginTop: 6 }}>
+
+              権限：
+
+              <PopButton onClick={() => changeRole(u.id, "viewer")}>
+                viewer
+              </PopButton>
+
+              <PopButton onClick={() => changeRole(u.id, "editor")}>
+                editor
+              </PopButton>
+
+              <PopButton onClick={() => changeRole(u.id, "admin")}>
+                admin
+              </PopButton>
+
+            </div>
+
           </div>
-        )}
+        ))}
+
       </PopCard>
+
+
+      {/* ゴール追加 */}
+      <PopCard icon="➕" title="ゴール追加">
+
+        <div>名前</div>
+
+        <PopInput
+          value={newGoalLabel}
+          onChange={(e) => setNewGoalLabel(e.target.value)}
+        />
+
+        <div>ポイント</div>
+
+        <PopInput
+          type="number"
+          value={newGoalPoint}
+          onChange={(e) =>
+            setNewGoalPoint(Number(e.target.value))
+          }
+        />
+
+        <PopButton onClick={addGoal}>
+          追加
+        </PopButton>
+
+      </PopCard>
+
+
+      {/* ゴール一覧 */}
+      <PopCard icon="🎯" title="ゴール編集">
+
+        {goals.map((g) => (
+
+          <div key={g.id} style={{ marginBottom: 12 }}>
+
+            <PopInput
+              defaultValue={g.label}
+              onBlur={(e) =>
+                updateGoal(g.id, e.target.value, g.point)
+              }
+            />
+
+            <PopInput
+              type="number"
+              defaultValue={g.point}
+              onBlur={(e) =>
+                updateGoal(
+                  g.id,
+                  g.label,
+                  Number(e.target.value)
+                )
+              }
+            />
+
+          </div>
+
+        ))}
+
+      </PopCard>
+
     </PopShell>
   );
 }

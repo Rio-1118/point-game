@@ -57,7 +57,7 @@ export default function HomePage() {
 
       {email ? (
         <>
-          {role === "editor" && (
+          {(role === "editor" || role === "admin") && (
             <PopCard icon="✍️" title="入力">
               <PopButton onClick={() => router.push("/entry")}>
                 ポイントを登録する
