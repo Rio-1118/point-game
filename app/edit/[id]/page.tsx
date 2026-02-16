@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { doc, getDoc } from "firebase/firestore";
 import { watchAuthAndRole, type Role } from "@/lib/role";
 import { db } from "@/lib/firebase";
@@ -19,9 +19,10 @@ import {
 
 type Reason = { id: string; label: string };
 
-export default function EditEventPage({ params }: { params: { id: string } }) {
+export default function EditEventPage() {
   const router = useRouter();
-  const id = params.id;
+  const params = useParams<{ id: string }>();
+  const id = params?.id;
 
   const [loading, setLoading] = useState(true);
   const [uid, setUid] = useState("");
@@ -46,7 +47,7 @@ export default function EditEventPage({ params }: { params: { id: string } }) {
   const [reasonId, setReasonId] = useState<string>(reasons[0].id);
   const [note, setNote] = useState<string>("");
 
-  const [ownerUid, setOwnerUid] = useState<string>(""); // このイベントの作成者
+  const [ownerUid, setOwnerUid] = useState<string>("");
   const [msg, setMsg] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -56,8 +57,12 @@ export default function EditEventPage({ params }: { params: { id: string } }) {
 
   // 🔒 editor/adminのみ + イベント読み込み
   useEffect(() => {
+    if (!id) return; // idが入るまで待つ
+
     const unsub = watchAuthAndRole(
       async (info) => {
+        setMsg("");
+
         if (info.role !== "editor" && info.role !== "admin") {
           router.replace("/login");
           return;
@@ -66,39 +71,45 @@ export default function EditEventPage({ params }: { params: { id: string } }) {
         setUid(info.uid);
         setRole(info.role);
 
-        // イベント取得
-        const snap = await getDoc(doc(db, "events", id));
-        if (!snap.exists()) {
-          router.replace("/view");
-          return;
+        try {
+          const snap = await getDoc(doc(db, "events", String(id)));
+          if (!snap.exists()) {
+            setMsg("❌ この履歴が見つかりません");
+            return;
+          }
+
+          const e = snap.data() as any;
+
+          // createdBy
+          const createdBy = String(e.createdBy ?? "");
+          setOwnerUid(createdBy);
+
+          // editorは自分の分だけ / adminは全部OK
+          if (info.role === "editor" && createdBy !== info.uid) {
+            setMsg("⚠️ これは自分の履歴ではないので編集できません");
+            return;
+          }
+
+          // delta → sign/points
+          const d = Number(e.delta ?? 0);
+          setSign(d >= 0 ? "plus" : "minus");
+          setPoints(Math.max(1, Math.abs(d)));
+
+          // date（古いデータは eventDate の可能性もあるので両対応）
+          const dt = String(e.date ?? e.eventDate ?? todayYMD());
+          setEventDate(dt);
+
+          // reasonLabel
+          const rl = String(e.reasonLabel ?? e.reason ?? "");
+          const found = reasons.find((r) => r.label === rl);
+          setReasonId(found ? found.id : "other");
+
+          setNote(String(e.note ?? ""));
+        } catch (err: any) {
+          setMsg(`❌ 読み込みエラー: ${err?.message ?? err}`);
+        } finally {
+          setLoading(false);
         }
-
-        const e = snap.data() as any;
-
-        // editor は「自分のイベント」だけ編集OK / adminは全部OK
-        const createdBy = String(e.createdBy ?? "");
-        setOwnerUid(createdBy);
-
-        if (info.role === "editor" && createdBy !== info.uid) {
-          router.replace("/view");
-          return;
-        }
-
-        // フォームへ反映
-        const d = Number(e.delta ?? 0);
-        setSign(d >= 0 ? "plus" : "minus");
-        setPoints(Math.max(1, Math.abs(d)));
-
-        setEventDate(String(e.date ?? todayYMD()));
-
-        // reasonLabel から reasonId を推定（見つからなければ other）
-        const rl = String(e.reasonLabel ?? "");
-        const found = reasons.find((r) => r.label === rl);
-        setReasonId(found ? found.id : "other");
-
-        setNote(String(e.note ?? ""));
-
-        setLoading(false);
       },
       () => router.replace("/login")
     );
@@ -119,13 +130,12 @@ export default function EditEventPage({ params }: { params: { id: string } }) {
 
     setSaving(true);
     try {
-      await updateEvent(id, {
+      await updateEvent(String(id), {
         delta,
         date: eventDate,
         reasonLabel,
         note: note.trim(),
       });
-
       setMsg("✅ 更新しました！");
     } catch (e: any) {
       setMsg(`❌ 更新できませんでした: ${e?.message ?? e}`);
@@ -137,7 +147,9 @@ export default function EditEventPage({ params }: { params: { id: string } }) {
   if (loading) {
     return (
       <PopShell>
-        <PopCard icon="⏳" title="読み込み中…">少し待ってね</PopCard>
+        <PopCard icon="⏳" title="少し待ってね">
+          読み込み中…
+        </PopCard>
       </PopShell>
     );
   }
@@ -147,7 +159,7 @@ export default function EditEventPage({ params }: { params: { id: string } }) {
       <PopCard icon="✏️" title="履歴を編集">
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <PopPill>権限：{role}</PopPill>
-          <PopPill>イベントID：{id}</PopPill>
+          <PopPill>イベントID：{String(id)}</PopPill>
           {role === "admin" ? <PopPill>作成者UID：{ownerUid}</PopPill> : null}
         </div>
       </PopCard>
@@ -207,14 +219,14 @@ export default function EditEventPage({ params }: { params: { id: string } }) {
       </PopCard>
 
       {msg ? (
-        <PopCard icon={msg.startsWith("✅") ? "✅" : "⚠️"} title="メッセージ">
+        <PopCard icon={msg.startsWith("✅") ? "✅" : msg.startsWith("⚠️") ? "⚠️" : "❌"} title="メッセージ">
           <div style={{ fontWeight: 900 }}>{msg}</div>
         </PopCard>
       ) : null}
 
       <PopCard icon="💾" title="保存">
         <div style={{ display: "grid", gap: 10 }}>
-          <PopButton onClick={onSave} disabled={saving}>
+          <PopButton onClick={onSave} disabled={saving || (role === "editor" && ownerUid !== uid)}>
             {saving ? "更新中…" : "更新する"}
           </PopButton>
           <PopButton variant="ghost" onClick={() => router.push("/view")}>
