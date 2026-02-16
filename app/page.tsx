@@ -4,12 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { watchAuthAndRole, type Role } from "@/lib/role";
 
-import {
-  PopShell,
-  PopCard,
-  PopButton,
-  PopPill,
-} from "@/components/PopUI";
+import { PopShell, PopCard, PopButton, PopPill } from "@/components/PopUI";
 
 export default function HomePage() {
   const router = useRouter();
@@ -35,7 +30,7 @@ export default function HomePage() {
     );
 
     return () => unsub();
-  }, []);
+  }, [router]);
 
   if (loading) {
     return (
@@ -49,7 +44,6 @@ export default function HomePage() {
 
   return (
     <PopShell>
-
       <PopCard icon="🏠" title="ポイントゲーム">
         {email ? (
           <>
@@ -92,7 +86,6 @@ export default function HomePage() {
           </PopButton>
         </PopCard>
       )}
-
     </PopShell>
   );
 }
