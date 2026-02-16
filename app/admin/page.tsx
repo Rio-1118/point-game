@@ -163,23 +163,54 @@ export default function AdminPage() {
 
             </div>
 
-            <div style={{ marginTop: 6 }}>
+<div style={{ marginTop: 6 }}>
 
-              権限：
+  <div style={{ fontWeight: 900, marginBottom: 4 }}>
+    現在の権限：
+    <span style={{
+      marginLeft: 8,
+      padding: "2px 10px",
+      borderRadius: 12,
+      background:
+        u.role === "admin"
+          ? "#ff4d4f"
+          : u.role === "editor"
+          ? "#1890ff"
+          : "#888",
+      color: "#fff",
+      fontWeight: 900
+    }}>
+      {u.role}
+    </span>
+  </div>
 
-              <PopButton onClick={() => changeRole(u.id, "viewer")}>
-                viewer
-              </PopButton>
+  <div style={{ display: "flex", gap: 8 }}>
 
-              <PopButton onClick={() => changeRole(u.id, "editor")}>
-                editor
-              </PopButton>
+    <PopButton
+      variant={u.role === "viewer" ? "primary" : "ghost"}
+      onClick={() => changeRole(u.id, "viewer")}
+    >
+      viewer
+    </PopButton>
 
-              <PopButton onClick={() => changeRole(u.id, "admin")}>
-                admin
-              </PopButton>
+    <PopButton
+      variant={u.role === "editor" ? "primary" : "ghost"}
+      onClick={() => changeRole(u.id, "editor")}
+    >
+      editor
+    </PopButton>
 
-            </div>
+    <PopButton
+      variant={u.role === "admin" ? "danger" : "ghost"}
+      onClick={() => changeRole(u.id, "admin")}
+    >
+      admin
+    </PopButton>
+
+  </div>
+
+</div>
+
 
           </div>
         ))}
