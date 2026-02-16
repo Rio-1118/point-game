@@ -1,33 +1,32 @@
 "use client";
 
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { addDoc, collection, doc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 export type EventInput = {
-  date: string;           // YYYY-MM-DD
-  delta: number;          // + / -
-  reasonId?: string;      // 理由ID
-  reasonLabel?: string;   // 理由ラベル
+  delta: number;          // +10 / -5 みたいな増減
+  date: string;           // "YYYY-MM-DD"
+  reasonLabel: string;    // 表示用の理由（例：お手伝いした）
   note?: string;          // 自由入力
-  createdBy: string;      // UID
-  createdByName?: string; // PN
+  createdBy: string;      // uid
+  createdByName: string;  // PN
 };
 
 export async function createEvent(input: EventInput) {
-  const payload = {
-    date: input.date,
-    delta: input.delta,
-
-    reasonId: input.reasonId ?? null,
-    reasonLabel: input.reasonLabel ?? null,
-
+  await addDoc(collection(db, "events"), {
+    ...input,
     note: input.note ?? "",
-
-    createdBy: input.createdBy,
-    createdByName: input.createdByName ?? null,
-
     createdAt: serverTimestamp(),
-  };
+    updatedAt: serverTimestamp(),
+  });
+}
 
-  await addDoc(collection(db, "events"), payload);
+export async function updateEvent(
+  id: string,
+  patch: Partial<Pick<EventInput, "delta" | "date" | "reasonLabel" | "note">>
+) {
+  await updateDoc(doc(db, "events", id), {
+    ...patch,
+    updatedAt: serverTimestamp(),
+  });
 }
