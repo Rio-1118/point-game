@@ -30,3 +30,9 @@ export async function updateEvent(
     updatedAt: serverTimestamp(),
   });
 }
+import { deleteDoc } from "firebase/firestore";
+
+// ✅ 追加：削除
+export async function deleteEvent(id: string) {
+  await deleteDoc(doc(db, "events", id));
+}
